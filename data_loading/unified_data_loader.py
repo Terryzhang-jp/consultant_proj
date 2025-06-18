@@ -64,8 +64,8 @@ class UnifiedDataLoader:
         df = df.rename(columns={'RANK': 'RANK_x'})
 
         # 转换年份格式 (2位数转4位数)
-        # JOB_YYY=187 表示 1987年，需要加1900
-        df['S_YR'] = df['JOB_YYY'] + 1900
+        # JOB_YYY=187 表示 1987年，需要加1800
+        df['S_YR'] = df['JOB_YYY'] + 1800
         df['S_MO'] = df['JOB_MM']
 
         return df
@@ -93,8 +93,8 @@ class UnifiedDataLoader:
         df['KYUYO'] = df['SASHIHIKI'] * 1.1
 
         # 转换年份格式 (2位数转4位数)
-        # S_YR=188 表示 1988年，需要加1900
-        df['S_YR'] = df['S_YR'] + 1900
+        # S_YR=188 表示 1988年，需要加1800
+        df['S_YR'] = df['S_YR'] + 1800
         
         return df
     
