@@ -36,71 +36,33 @@ def analyze_csv_file(file_path):
             "shape": list(df.shape),
             "columns": list(df.columns),
             "column_count": len(df.columns),
-            "row_count": len(df),
-            "memory_usage_mb": round(df.memory_usage(deep=True).sum() / 1024 / 1024, 2)
+            "row_count": len(df)
         }
-        
-        # 列的数据类型
+
+        # 列的数据类型（只保留关键信息）
         dtypes = {}
         for col in df.columns:
             dtypes[col] = str(df[col].dtype)
         info["column_dtypes"] = dtypes
-        
-        # 缺失值统计
-        missing_values = {}
+
+        # 只统计缺失值比例，不详细统计
+        missing_summary = {}
         for col in df.columns:
-            missing_count = df[col].isnull().sum()
-            missing_pct = round(missing_count / len(df) * 100, 2)
-            missing_values[col] = {
-                "missing_count": int(missing_count),
-                "missing_percentage": missing_pct
-            }
-        info["missing_values"] = missing_values
-        
-        # 数值列的基本统计
-        numeric_stats = {}
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
-        for col in numeric_cols:
-            try:
-                stats = df[col].describe()
-                numeric_stats[col] = {
-                    "min": float(stats['min']) if not pd.isna(stats['min']) else None,
-                    "max": float(stats['max']) if not pd.isna(stats['max']) else None,
-                    "mean": float(stats['mean']) if not pd.isna(stats['mean']) else None,
-                    "std": float(stats['std']) if not pd.isna(stats['std']) else None,
-                    "unique_count": int(df[col].nunique())
-                }
-            except:
-                numeric_stats[col] = {"error": "统计计算失败"}
-        info["numeric_statistics"] = numeric_stats
-        
-        # 文本列的基本信息
-        text_stats = {}
-        text_cols = df.select_dtypes(include=['object']).columns
-        for col in text_cols:
-            try:
-                unique_count = df[col].nunique()
-                sample_values = df[col].dropna().head(5).tolist()
-                text_stats[col] = {
-                    "unique_count": int(unique_count),
-                    "sample_values": sample_values
-                }
-            except:
-                text_stats[col] = {"error": "统计计算失败"}
-        info["text_statistics"] = text_stats
-        
-        # 前5行数据样本
+            missing_pct = round(df[col].isnull().sum() / len(df) * 100, 2)
+            if missing_pct > 0:  # 只记录有缺失值的列
+                missing_summary[col] = missing_pct
+        info["missing_percentage"] = missing_summary
+
+        # 只保留前2行样本数据
         try:
-            sample_data = df.head(5).to_dict('records')
-            # 转换numpy类型为Python原生类型
+            sample_data = df.head(2).to_dict('records')
+            # 简化数据转换
             for record in sample_data:
                 for key, value in record.items():
                     if pd.isna(value):
                         record[key] = None
                     elif isinstance(value, (np.integer, np.floating)):
                         record[key] = float(value) if isinstance(value, np.floating) else int(value)
-                    elif isinstance(value, np.bool_):
-                        record[key] = bool(value)
             info["sample_data"] = sample_data
         except:
             info["sample_data"] = "无法获取样本数据"
@@ -135,36 +97,31 @@ def analyze_excel_file(file_path):
                     "column_count": len(df.columns),
                     "row_count": len(df)
                 }
-                
+
                 # 列的数据类型
                 dtypes = {}
                 for col in df.columns:
                     dtypes[col] = str(df[col].dtype)
                 sheet_info["column_dtypes"] = dtypes
-                
-                # 缺失值统计
-                missing_values = {}
+
+                # 只统计有缺失值的列
+                missing_summary = {}
                 for col in df.columns:
-                    missing_count = df[col].isnull().sum()
-                    missing_pct = round(missing_count / len(df) * 100, 2)
-                    missing_values[col] = {
-                        "missing_count": int(missing_count),
-                        "missing_percentage": missing_pct
-                    }
-                sheet_info["missing_values"] = missing_values
-                
-                # 前3行数据样本
+                    missing_pct = round(df[col].isnull().sum() / len(df) * 100, 2)
+                    if missing_pct > 0:
+                        missing_summary[col] = missing_pct
+                sheet_info["missing_percentage"] = missing_summary
+
+                # 只保留前2行样本数据
                 try:
-                    sample_data = df.head(3).to_dict('records')
-                    # 转换numpy类型
+                    sample_data = df.head(2).to_dict('records')
+                    # 简化数据转换
                     for record in sample_data:
                         for key, value in record.items():
                             if pd.isna(value):
                                 record[key] = None
                             elif isinstance(value, (np.integer, np.floating)):
                                 record[key] = float(value) if isinstance(value, np.floating) else int(value)
-                            elif isinstance(value, np.bool_):
-                                record[key] = bool(value)
                     sheet_info["sample_data"] = sample_data
                 except:
                     sheet_info["sample_data"] = "无法获取样本数据"
@@ -180,10 +137,22 @@ def analyze_excel_file(file_path):
         return {"error": f"分析失败: {str(e)}"}
 
 def analyze_data_directory(data_dir="data"):
-    """分析data目录中的所有文件"""
+    """分析data目录中的关键文件"""
     if not os.path.exists(data_dir):
         return {"error": f"目录不存在: {data_dir}"}
-    
+
+    # 定义我们关心的关键文件（用于hypothesis验证）
+    key_files = [
+        "LPヒストリー_hashed.csv",
+        "報酬データ_hashed.csv",
+        "懲戒処分_事故区分等追加_hashed.csv",
+        "業績_hashed.csv",
+        "MTG出席率2021-2023_hashed.csv",
+        "社長杯入賞履歴_LP",  # 部分匹配
+        "苦情データ_hashed.xlsx",
+        "事務ミスデータ"  # 部分匹配
+    ]
+
     analysis_results = {
         "analysis_timestamp": datetime.now().isoformat(),
         "data_directory": data_dir,
@@ -196,13 +165,23 @@ def analyze_data_directory(data_dir="data"):
             "failed_files": 0
         }
     }
-    
+
     # 获取所有文件
-    files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
+    all_files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
+
+    # 过滤出关键文件
+    files = []
+    for file_name in all_files:
+        for key_file in key_files:
+            if key_file in file_name:
+                files.append(file_name)
+                break
+
     analysis_results["summary"]["total_files"] = len(files)
+    analysis_results["summary"]["total_files_in_directory"] = len(all_files)
     
-    print(f"🔍 开始分析 {data_dir} 目录中的 {len(files)} 个文件...")
-    
+    print(f"🔍 开始分析 {data_dir} 目录中的 {len(files)} 个关键文件 (总共{len(all_files)}个文件)...")
+
     for file_name in files:
         file_path = os.path.join(data_dir, file_name)
         print(f"📄 分析文件: {file_name}")
