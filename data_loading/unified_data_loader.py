@@ -36,19 +36,38 @@ class UnifiedDataLoader:
         file_path = os.path.join(self.data_dir, 'LPヒストリー_hashed.csv')
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"LP历史数据文件不存在: {file_path}")
-        
+
         df = pd.read_csv(file_path)
-        
-        # 数据类型转换和验证
-        required_columns = ['LP', 'AMGR', 'OFFICE', 'RANK_x', 'JOB_YYY', 'JOB_MM', 'JOB_DD']
-        missing_columns = [col for col in required_columns if col not in df.columns]
+
+        # 适配真实数据的列名
+        # 真实数据列名: LP, OFFICE, UNIT, MGR, AMGR, JOB_YYY, JOB_MM, JOB_DD, RANK, STATUS
+        required_columns_mapping = {
+            'LP': 'LP',
+            'AMGR': 'AMGR',
+            'OFFICE': 'OFFICE',
+            'RANK': 'RANK_x',  # 映射RANK到RANK_x以保持兼容性
+            'JOB_YYY': 'JOB_YYY',
+            'JOB_MM': 'JOB_MM',
+            'JOB_DD': 'JOB_DD'
+        }
+
+        # 检查必要列是否存在
+        missing_columns = []
+        for real_col, expected_col in required_columns_mapping.items():
+            if real_col not in df.columns:
+                missing_columns.append(real_col)
+
         if missing_columns:
             raise ValueError(f"LP历史数据缺少必要列: {missing_columns}")
-        
+
+        # 重命名列以保持兼容性
+        df = df.rename(columns={'RANK': 'RANK_x'})
+
         # 转换年份格式 (2位数转4位数)
-        df['S_YR'] = df['JOB_YYY'] + 2000
+        # JOB_YYY=187 表示 1987年，需要加1900
+        df['S_YR'] = df['JOB_YYY'] + 1900
         df['S_MO'] = df['JOB_MM']
-        
+
         return df
     
     def load_reward_data(self) -> pd.DataFrame:
@@ -59,17 +78,23 @@ class UnifiedDataLoader:
         
         df = pd.read_csv(file_path)
         
-        # 数据类型转换和验证
-        required_columns = ['SYAIN_CODE', 'S_YR', 'S_MO', 'KYUYO', 'SASHIHIKI']
+        # 适配真实数据的列名
+        # 真实数据列名: SYAIN_CODE, S_YR, S_MO, SASHIHIKI, RANK
+        # 注意：真实数据没有KYUYO列，我们需要生成它
+        required_columns = ['SYAIN_CODE', 'S_YR', 'S_MO', 'SASHIHIKI']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             raise ValueError(f"报酬数据缺少必要列: {missing_columns}")
-        
+
         # 统一列名
         df['LP'] = df['SYAIN_CODE']
-        
+
+        # 生成KYUYO列（假设KYUYO = SASHIHIKI * 1.1，这是一个合理的估算）
+        df['KYUYO'] = df['SASHIHIKI'] * 1.1
+
         # 转换年份格式 (2位数转4位数)
-        df['S_YR'] = df['S_YR'] + 2000
+        # S_YR=188 表示 1988年，需要加1900
+        df['S_YR'] = df['S_YR'] + 1900
         
         return df
     
@@ -102,13 +127,17 @@ class UnifiedDataLoader:
         file_path = os.path.join(self.data_dir, '業績_hashed.csv')
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"業績数据文件不存在: {file_path}")
-        
+
         df = pd.read_csv(file_path)
-        
-        # 转换年份格式 (2位数转4位数)
-        if 'S_YR' in df.columns:
-            df['S_YR'] = df['S_YR'] + 2000
-        
+
+        # 适配真实数据格式
+        # 真实数据列名: LP, ym, 年換算手数料, 件数
+        # ym格式: 201609 (YYYYMM)
+        if 'ym' in df.columns:
+            # 从ym列提取年份和月份
+            df['S_YR'] = df['ym'] // 100  # 201609 -> 2016
+            df['S_MO'] = df['ym'] % 100   # 201609 -> 9
+
         return df
     
     def load_mtg_attendance_data(self) -> pd.DataFrame:
@@ -116,8 +145,19 @@ class UnifiedDataLoader:
         file_path = os.path.join(self.data_dir, 'MTG出席率2021-2023_hashed.csv')
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"MTG出席率数据文件不存在: {file_path}")
-        
+
         df = pd.read_csv(file_path)
+
+        # 适配真实数据格式
+        # 真实数据列名: LPコード, HONBUID, 開催日, 代替日, 廃止有無, 出欠, 欠席理由, 出席扱い
+        # 统一列名
+        df['LP'] = df['LPコード']
+
+        # 从開催日提取年份和月份
+        df['開催日'] = pd.to_datetime(df['開催日'], errors='coerce')
+        df['S_YR'] = df['開催日'].dt.year
+        df['S_MO'] = df['開催日'].dt.month
+
         return df
     
     def load_complaints_data(self) -> pd.DataFrame:
@@ -125,8 +165,9 @@ class UnifiedDataLoader:
         file_path = os.path.join(self.data_dir, '苦情データ_hashed.xlsx')
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"苦情数据文件不存在: {file_path}")
-        
-        df = pd.read_excel(file_path, sheet_name='苦情データ')
+
+        # 真实数据的sheet名称是'Sheet1'
+        df = pd.read_excel(file_path, sheet_name='Sheet1')
         return df
     
     def load_awards_data(self) -> pd.DataFrame:
@@ -143,8 +184,9 @@ class UnifiedDataLoader:
         file_path = os.path.join(self.data_dir, '★事務ミスデータ_不要データ削除版_hashed.xlsx')
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"事務ミス数据文件不存在: {file_path}")
-        
-        df = pd.read_excel(file_path, sheet_name='事務ミス')
+
+        # 真实数据的sheet名称是'T事務ミス台帳'
+        df = pd.read_excel(file_path, sheet_name='T事務ミス台帳')
         return df
     
     def create_final_dataset(self, 
@@ -208,11 +250,15 @@ class UnifiedDataLoader:
         
         if include_mtg:
             mtg_data = self.load_mtg_attendance_data()
-            # 转换MTG数据格式以匹配
-            mtg_data['S_YR'] = mtg_data['YEAR']
-            mtg_data['S_MO'] = mtg_data['MONTH']
+            # MTG数据已经在load函数中处理了S_YR和S_MO
+            # 计算出席率
+            mtg_summary = mtg_data.groupby(['LP', 'S_YR', 'S_MO']).agg({
+                '出席扱い': 'mean'  # 计算平均出席率
+            }).reset_index()
+            mtg_summary = mtg_summary.rename(columns={'出席扱い': 'ATTENDANCE_RATE'})
+
             if final_df is not None:
-                final_df = pd.merge(final_df, mtg_data[['LP', 'S_YR', 'S_MO', 'ATTENDANCE_RATE']], 
+                final_df = pd.merge(final_df, mtg_summary,
                                   on=['LP', 'S_YR', 'S_MO'], how='left')
         
         # 填充缺失值
