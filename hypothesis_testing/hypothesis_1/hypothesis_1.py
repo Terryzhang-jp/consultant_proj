@@ -145,49 +145,49 @@ class Hypothesis1ValidatorCorrect:
         """
         print("Applying exact mid.py logic for LP SASHIHIKI analysis...")
 
-        # Step 1: Filter necessary columns and rank 10 data (EXACT from mid.py)
-        base_needed_cols = ['LP', 'RANK_x', 'S_YR', 'S_MO', 'SASHIHIKI', 'AMGR', 'SHOBUN']
+        # Step 1: Create FISCAL_HALF for the ENTIRE dataframe first (EXACT from original)
+        dataframe_with_fiscal = dataframe.copy()
+        if 'FISCAL_HALF' not in dataframe_with_fiscal.columns:
+            def get_fiscal_half_vectorized(s_yr, s_mo):
+                """Exact replica of original get_fiscal_half function"""
+                conditions = [
+                    (s_mo >= 4) & (s_mo <= 9),  # First half
+                    s_mo < 4,                   # Second half of previous year
+                ]
+                choices = [
+                    s_yr.astype(str) + '_H1',           # First half
+                    (s_yr - 1).astype(str) + '_H2',     # Second half of previous year
+                ]
+                return np.select(conditions, choices, default=s_yr.astype(str) + '_H2')  # Default: second half
+
+            dataframe_with_fiscal['FISCAL_HALF'] = get_fiscal_half_vectorized(
+                dataframe_with_fiscal['S_YR'], dataframe_with_fiscal['S_MO']
+            )
+
+        # Step 2: Filter necessary columns and rank 10 data (EXACT from mid.py)
+        base_needed_cols = ['LP', 'RANK_x', 'S_YR', 'S_MO', 'SASHIHIKI', 'AMGR', 'SHOBUN', 'FISCAL_HALF']
 
         # Handle different RANK column names
-        rank_col = 'RANK_x' if 'RANK_x' in dataframe.columns else 'RANK'
-        if rank_col in dataframe.columns:
+        rank_col = 'RANK_x' if 'RANK_x' in dataframe_with_fiscal.columns else 'RANK'
+        if rank_col in dataframe_with_fiscal.columns:
             # Filter for RANK_x == 10 ONLY (EXACT from mid.py)
-            available_cols = [col for col in base_needed_cols if col in dataframe.columns]
+            available_cols = [col for col in base_needed_cols if col in dataframe_with_fiscal.columns]
             available_cols = [col if col != 'RANK_x' else rank_col for col in available_cols]
-            lp_df = dataframe[dataframe[rank_col] == 10][available_cols].copy()
+            lp_df = dataframe_with_fiscal[dataframe_with_fiscal[rank_col] == 10][available_cols].copy()
         else:
             print("Warning: No RANK column found, using all data")
-            available_cols = [col for col in base_needed_cols if col in dataframe.columns]
-            lp_df = dataframe[available_cols].copy()
+            available_cols = [col for col in base_needed_cols if col in dataframe_with_fiscal.columns]
+            lp_df = dataframe_with_fiscal[available_cols].copy()
 
         if len(lp_df) == 0:
             print("Warning: No data after filtering, using all data")
-            lp_df = dataframe.copy()
-
-        # Step 2: Create fiscal half using vectorized operations (exact from mid.py)
-        if 'FISCAL_HALF' not in lp_df.columns:
-            lp_df['FISCAL_HALF'] = np.where(
-                (lp_df['S_MO'] >= 4) & (lp_df['S_MO'] <= 9),
-                lp_df['S_YR'].astype(str) + '_H1',
-                np.where(lp_df['S_MO'] < 4,
-                         (lp_df['S_YR'] - 1).astype(str) + '_H2',
-                         lp_df['S_YR'].astype(str) + '_H2')
-            )
+            lp_df = dataframe_with_fiscal.copy()
 
         # Step 3 & 4: Calculate averages by AMGR (EXACT from mid.py)
+        # Use LP data for individual averages
         lp_avg_sashihiki = lp_df.groupby(['LP', 'FISCAL_HALF', 'AMGR'])['SASHIHIKI'].mean().reset_index()
 
-        # Create FISCAL_HALF for the full dataframe if it doesn't exist
-        dataframe_with_fiscal = dataframe.copy()
-        if 'FISCAL_HALF' not in dataframe_with_fiscal.columns:
-            dataframe_with_fiscal['FISCAL_HALF'] = np.where(
-                (dataframe_with_fiscal['S_MO'] >= 4) & (dataframe_with_fiscal['S_MO'] <= 9),
-                dataframe_with_fiscal['S_YR'].astype(str) + '_H1',
-                np.where(dataframe_with_fiscal['S_MO'] < 4,
-                         (dataframe_with_fiscal['S_YR'] - 1).astype(str) + '_H2',
-                         dataframe_with_fiscal['S_YR'].astype(str) + '_H2')
-            )
-
+        # Use FULL dataframe for AMGR averages (EXACT from original)
         amgr_avg_sashihiki = dataframe_with_fiscal.groupby(['AMGR', 'FISCAL_HALF'])['SASHIHIKI'].mean().reset_index()
         amgr_avg_sashihiki.columns = ['AMGR', 'FISCAL_HALF', 'AMGR_AVG_SASHIHIKI']
 
@@ -204,14 +204,15 @@ class Hypothesis1ValidatorCorrect:
 
         # 变数1: Sustained_Low (EXACT from mid.py)
         result_df['Sustained_Low'] = (result_df['Rolling_Low'] >= 6).astype(int)
-        result_df['Variable_1'] = result_df['Sustained_Low']
 
         # Step 7: Check next half-year SHOBUN (exact from mid.py)
         shobun_df = lp_df[['LP', 'FISCAL_HALF', 'SHOBUN']].dropna(subset=['SHOBUN'])
         shobun_df['Has_SHOBUN'] = True
 
         # Create next half-year mapping (exact from mid.py)
-        fiscal_half_order = sorted(result_df['FISCAL_HALF'].unique())
+        # Sort fiscal halves properly: 1988_H1, 1988_H2, 1989_H1, 1989_H2, etc.
+        fiscal_half_order = sorted(result_df['FISCAL_HALF'].unique(),
+                                 key=lambda x: (int(x.split('_')[0]), x.split('_')[1]))
         next_half_mapping = dict(zip(fiscal_half_order[:-1], fiscal_half_order[1:]))
         result_df['Next_FISCAL_HALF'] = result_df['FISCAL_HALF'].map(next_half_mapping)
 
@@ -227,7 +228,6 @@ class Hypothesis1ValidatorCorrect:
 
         # 变数2: SHOBUN_in_Next_Half (EXACT from mid.py)
         result_df['SHOBUN_in_Next_Half'] = result_df['Has_SHOBUN'].fillna(False).astype(int)
-        result_df['Variable_2'] = result_df['SHOBUN_in_Next_Half']
 
         # Clean temporary columns (EXACT from mid.py)
         result_df = result_df.drop(
