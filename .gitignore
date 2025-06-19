@@ -1,0 +1,80 @@
+# このファイルはGitのバージョン管理から特定のファイルやフォルダを除外するために使用します。
+# コメントアウト（#で始まる行）を外すと、そのファイルタイプも除外されるようになります。
+
+# --- 仮想環境 ---
+# Pythonの仮想環境フォルダ。ライブラリが大量に含まれるため、リポジトリに含めません。
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+__pypackages__/
+
+# --- Pythonキャッシュファイル ---
+# 実行速度を上げるための中間ファイル。自動的に再生成されます。
+__pycache__/
+*.py[cod]
+*$py.class
+*.py,cover
+.mypy_cache/
+.pyre/
+.pytype/
+cython_debug/
+
+# --- Jupyter Notebook / IPython ---
+# NotebookのチェックポイントファイルとIPythonの設定ファイル
+.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# --- パッケージ管理 / ビルドツール ---
+# パッケージのビルド時に生成される一時フォルダやファイル
+build/
+dist/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+wheels/
+pip-log.txt
+pip-wheel-metadata/
+poetry.lock
+
+# --- テスト / カバレッジ ---
+# テスト実行時に生成されるレポートやキャッシュ
+.coverage
+.coverage.*
+.cache
+htmlcov/
+.tox/
+.pytest_cache/
+
+# --- IDE / エディタ設定 ---
+# 開発環境固有の設定ファイル（VSCode, PyCharmなど）
+.vscode/
+.idea/
+*.swp
+*.swo
+.spyderproject
+.ropeproject
+
+# --- データファイル ---
+# 大容量になりがちなデータファイルは、原則としてGit管理に含めません。
+# プロジェクトでデータファイルを管理しない場合は、以下のコメントアウトを外してください。
+# *.csv
+# *.xlsx
+# *.xls
+# *.sqlite
+# *.db
+# *.json
+# *.pickle
+
+# --- OSが生成するファイル ---
+# macOSやWindowsが自動生成する隠しファイル
+.DS_Store
+Thumbs.db
+
+# --- ログファイル ---
+*.log
